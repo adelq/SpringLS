@@ -109,16 +109,27 @@ public class IPRange implements Comparable<IPRange> {
 	}
 
 	/**
+	 * Checks whether a given IP is within our range (boundaries inclusive).
+	 * @param ip to be checked whether it is in our range
+	 * @return true if the supplied IP is in our range, false otherwise.
+	 */
+	public boolean contains(long ip) {
+		return ((ip >= getFromIP()) && (ip <= getToIP()));
+	}
+
+	/**
 	 * 2 character ISO country code, "XX" means unspecified
 	 * @return the countryCode2
-	 */ public String getCountryCode2() {
+	 */
+	public String getCountryCode2() {
 		return countryCode2;
 	}
 
 	/**
 	 * 2 character ISO country code, "XX" means unspecified
 	 * @param countryCode2 the countryCode2 to set
-	 */ public void setCountryCode2(String countryCode2) {
+	 */
+	public void setCountryCode2(String countryCode2) {
 		this.countryCode2 = countryCode2;
 	}
 }

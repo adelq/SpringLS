@@ -49,7 +49,11 @@ public class JPAAccountsService extends AbstractAccountsService {
 
 	public JPAAccountsService() {
 
-		emf = Persistence.createEntityManagerFactory("springls");
+		try {
+			emf = Persistence.createEntityManagerFactory("springls");
+		} catch (PersistenceException ex) {
+			LOG.error("Failed to initialize database storage", ex);
+		}
 	}
 
 	private EntityManager open() {
@@ -98,7 +102,7 @@ public class JPAAccountsService extends AbstractAccountsService {
 
 	@Override
 	public boolean isReadyToOperate() {
-		return true;
+		return (emf != null);
 	}
 
 	@Override
@@ -280,7 +284,7 @@ public class JPAAccountsService extends AbstractAccountsService {
 			fetchByLastIpQuery.setParameter("ip", ip.getHostAddress());
 			act = (Account) fetchByLastIpQuery.getSingleResult();
 		} catch (Exception ex) {
-			LOG.trace("Failed fetching an account by last ip", ex);
+			LOG.trace("Failed fetching an account by last IP", ex);
 		} finally {
 			close(em);
 			em = null;

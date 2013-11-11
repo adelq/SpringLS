@@ -27,8 +27,9 @@ Maven needs to know about the project, in order to:
 * Pack the class files together with all the dependencies into a single,
   executable jar file
 
-### Installing Maven 2
+### Installing Maven
 
+You need Maven version 2 or later.
 In case you already have it installed, skip this paragraph.
 
 * _Windows_
@@ -49,7 +50,7 @@ In case you already have it installed, skip this paragraph.
 
 ### Building the software
 
-1.	Make sure you have Maven 2 installed.
+1.	Make sure you have Maven 2 or later installed.
 	You can check that with the following command:
 
 		> mvn --version
@@ -71,39 +72,81 @@ This is also where you find the final jar files:
 
 ## Running
 
-Use `runServer.sh` or `runServer.bat` to start the server, if you built it
-with Maven.
+The minimum requirement is the Java run-time environment (JRE) 6 or later.
+The latest version can be found
+[here](http://java.sun.com/j2se/1.6.0/download.jsp).
+
+Use `runServer.sh` (Unix, Linux, BSD, OS X) or `runServer.bat` (Windows)
+to start the server if you built it with Maven.
 You should also see the documentation in these files, for further info.
 
-When server is up and running, people from the local network will be able to 
-join it as well as people from the internet, although those from the internet 
-will not be able to join games hosted by local clients, still local clients will 
-be able to join games hosted by outside players. You do not need to create any 
-accounts when joining a LAN server, it will accept any user-name/password.
+### LAN mode
+When the server is up and running, people from the local network will be able to
+join it as well as people from the internet. Although those from the internet
+will not be able to join games hosted by local clients, local clients in turn
+will be able to join games hosted by outside players.
+You do not need to create any accounts when joining a LAN server,
+it will accept any user-name/password.
 
-If you experience problems using server in LAN mode (like other clients
+If you experience problems using the server in LAN mode (like other clients
 being timed-out when connecting to your game), you should try this:
 Let the player who is NOT running the server host. This is important
 when the server assigns a player (who is using the same computer as the server)
 the `localhost` IP (`127.0.0.1`). In this case, other players on the LAN would
-receive this IP and when they try to connect to the game host at `127.0.0.1`,
+receive this IP, and when they try to connect to the game host at `127.0.0.1`,
 the connection attempt will fail.
 The server should replace this IP with a local one (`192.168.x.y`) automatically,
 but if it fails for any reason, you should use the method described above.
 
-To be able to accept connections from outside the LAN, you will have to forward 
+To be able to accept connections from outside the LAN, you will have to forward
 ports 8200 (TCP) and 8201 (UDP) to the machine running the lobby.
 
-You will also need the Java run-time environment (JRE) 6 or later.
-The latest version can be found
-[here](http://java.sun.com/j2se/1.6.0/download.jsp).
+### Logging
+To configure logging details, for example using a higher verbosity level,
+you have to create a custom config file.
+If you are using the `runServer.*` script,
+this is done most easily using the following steps:
+
+_Unix, Linux, BSD, OS X_
+
+	cp src/main/resources/logback.xml conf
+	${EDITOR} conf/logback.xml
+
+_Windows_
+
+	copy src\main\resources\logback.xml conf
+	notepad conf\logback.xml
+
+For documentation about logback configuration,
+see [this link](http://logback.qos.ch/manual/configuration.html).
+
+### Configuring the DB
+In additiona to the `--database` command line parameter,
+you need to tell the server which database connection to use
+for storing account- and other info,
+by configuring JPA (Java Persistence API) details.
+If you are using the `runServer.*` script,
+this is done most easily using the following steps:
+
+_Unix, Linux, BSD, OS X_
+
+	cp conf/META-INF/persistence.xml.template conf/META-INF/persistence.xml
+	${EDITOR} conf/META-INF/persistence.xml
+
+_Windows_
+
+	copy conf\META-INF\persistence.xml.template conf\META-INF\persistence.xml
+	notepad conf\META-INF\persistence.xml
+
+Info about the default persistence provider (Hibernate)
+can be found [here](http://docs.jboss.org/hibernate/stable/entitymanager/reference/en/html/configuration.html).
 
 
 ## Command line arguments
 
 Example of usage:
 
-	> java -jar springls-*.jar --port 8200 --nat-port 8201 --log-main
+	> java -jar springls-*.jar --port 8200 --nat-port 8201
 
 Arguments are case sensitive.
 For the full list of arguments, use `--help`.
@@ -140,6 +183,13 @@ with `127.0.0.1`.
 
 You have to use the `--database` switch on the command-line,
 because otherwise the server will run in LAN-mode, and not use the DB.
+
+
+## Release a SNAPSHOT (devs only)
+
+To release a development version to the Sonatype snapshot repository only:
+
+		mvn clean deploy -Dgithub.downloads.dryRun=true
 
 
 ## Release (devs only)
@@ -192,37 +242,10 @@ Moves it from the sonatype staging to the main sonatype repo
 	* "Release" it
 
 
-## Notes
-
-* A Client may participate in only one battle at the same time. If he is hosting
-  a battle, he may not participate in other battles at the same time. The server
-  checks for that automatically.
-
-* Lines sent and received may be of any length. It has been tested with 600 KB
-  long strings and it worked in both directions. Nevertheless, commands like
-  "CLIENTS" still try to divide data into several lines, just to make sure the
-  client will receive them. Since the Delphi lobby client (TASClient) now
-  supports lines of any length, dividing data into several lines is not needed
-  anymore. Though, we keep it just in case, to be compatible with other clients
-  which may emerge in the future. I do not divide data when sending info on
-  battles and clients in battles. This lines may get long, but not longer than a
-  couple of hundred bytes (they should always be under 1 KB in length).
-
-* Sentences must be separated by TAB characters. This also means there should be
-  no TABs present in your sentences, since TABs are delimiters. That is why you
-  should always replace any TABs with spaces (2 or 8 usually).
-
-* Syncing works by clients comparing host's hash code with their own. If the two
-  codes match, client should update his battle status and this way telling other
-  clients in the battle that he is synced (or unsynced otherwise). The hash code
-  comes from hashing the mod's file and probably all the dependences too. See
-  unitsync documentation for details.
+## Dev Notes
 
 * Try not to edit the account file manually! If you do, do not forget that
   access numbers must be in binary form!
-
-* Team colors are currently set by players, perhaps it would be better if only
-  the host would be able to change them?
 
 * Whenever you use `killClient()` within a for loop, do not forget to decrease
   loop counter as you will skip next client in the list otherwise. This was the
@@ -233,7 +256,7 @@ Moves it from the sonatype staging to the main sonatype repo
   synchronization anyway, if you use multiple threads.
 
 
-## Dev-Links
+## Dev Links
 
 Great article on how to handle network timeouts in Java:
 http://www.javacoffeebreak.com/articles/network_timeouts/

@@ -30,10 +30,12 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.CharacterCodingException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Queue;
+import java.util.Set;
 import org.apache.commons.configuration.Configuration;
 
 import org.slf4j.Logger;
@@ -183,6 +185,20 @@ public class Client extends TeamController implements ContextReceiver {
 	 */
 	private boolean scriptPasswordSupported;
 
+	/**
+	 * A list of compatibility-flags, each representing a certain minor change
+	 * in protocol since the last protocol version number release.
+	 * These features all have to be implemented in a backwards compatible way,
+	 * so lobby clients not supporting them are still able to function normally.
+	 * This is comparable to IRC user/channel flags.
+	 * By default, all the optional functionalities are considered
+	 * as not supported by the client.
+	 *
+	 * See the "Recent Changes" section or the LOGIN command
+	 * in the lobby protocol documentation for a list of the current flags.
+	 */
+	private List<String> compatFlags;
+
 
 	public Client(SocketChannel sockChan) {
 
@@ -216,6 +232,7 @@ public class Client extends TeamController implements ContextReceiver {
 		cpu = 0;
 		scriptPassword = NO_SCRIPT_PASSWORD;
 		scriptPasswordSupported = false;
+		compatFlags = new ArrayList<String>(0);
 
 		timeOfLastReceive = System.currentTimeMillis();
 	}
@@ -231,6 +248,11 @@ public class Client extends TeamController implements ContextReceiver {
 		if (ip2CountryService != null) {
 			setLocale(ip2CountryService.getLocale(ip));
 		}
+
+		Set<String> supportedCompFlags = context.getServer().getSupportedCompFlags();
+		supportedCompFlags.add("a");
+		supportedCompFlags.add("b");
+		supportedCompFlags.add("sp");
 	}
 
 	@Override
@@ -308,11 +330,11 @@ public class Client extends TeamController implements ContextReceiver {
 			return true;
 		}
 
-		if (LOG.isDebugEnabled()) {
+		if (LOG.isTraceEnabled()) {
 			String nameOrIp = (account.getAccess() != Account.Access.NONE)
 						? account.getName()
 						: ip.getHostAddress();
-			LOG.debug("[->{}] \"{}\"", nameOrIp, data);
+			LOG.trace("[->{}] \"{}\"", nameOrIp, data);
 		}
 
 		try {
@@ -366,7 +388,7 @@ public class Client extends TeamController implements ContextReceiver {
 		// the welcome messages command-name is hardcoded to TASSERVER
 		// XXX maybe change TASSERVER to WELCOME or the like -> protocol change
 		sendLine(String.format("TASSERVER %s %s %d %d",
-				Misc.getAppVersionNonNull(),
+				conf.getString(ServerConfiguration.LOBBY_PROTOCOL_VERSION),
 				conf.getString(ServerConfiguration.ENGINE_VERSION),
 				conf.getInt(ServerConfiguration.NAT_PORT),
 				conf.getBoolean(ServerConfiguration.LAN_MODE) ? 1 : 0));
@@ -795,7 +817,7 @@ public class Client extends TeamController implements ContextReceiver {
 	private static void deleteLeadingWhiteSpace(StringBuilder str) {
 
 		int wsPos = 0;
-		while (isWhiteSpace(str.charAt(wsPos))) {
+		while ((wsPos < str.length()) && isWhiteSpace(str.charAt(wsPos))) {
 			wsPos++;
 		}
 		str.delete(0, wsPos);
@@ -833,15 +855,14 @@ public class Client extends TeamController implements ContextReceiver {
 
 		String line = null;
 
+		deleteLeadingWhiteSpace(recvBuf);
 		if (recvBuf.length() > 0) {
-			deleteLeadingWhiteSpace(recvBuf);
-
 			int nPos = recvBuf.indexOf("\n");
 			if (nPos != -1) {
 				int deleted = deleteCarriageReturnChars(recvBuf, nPos);
 
 				line = recvBuf.substring(0, nPos - deleted);
-				recvBuf.delete(0, nPos + 1);
+				recvBuf.delete(0, nPos - deleted);
 			}
 		}
 
@@ -993,7 +1014,7 @@ public class Client extends TeamController implements ContextReceiver {
 	 * Does the client accept accountIDs in ADDUSER command?
 	 * @param acceptAccountIDs the acceptAccountIDs to set
 	 */
-	public void setAcceptAccountIDs(boolean acceptAccountIDs) {
+	private void setAcceptAccountIDs(boolean acceptAccountIDs) {
 		this.acceptAccountIDs = acceptAccountIDs;
 	}
 
@@ -1008,7 +1029,7 @@ public class Client extends TeamController implements ContextReceiver {
 	/**
 	 * Does the client accept JOINBATTLEREQUEST command?
 	 */
-	public void setHandleBattleJoinAuthorization(
+	private void setHandleBattleJoinAuthorization(
 			boolean handleBattleJoinAuthorization)
 	{
 		this.handleBattleJoinAuthorization = handleBattleJoinAuthorization;
@@ -1026,7 +1047,7 @@ public class Client extends TeamController implements ContextReceiver {
 	 * Does the client accept the scriptPassord argument to the
 	 * JOINEDBATTLE command?
 	 */
-	public void setScriptPassordSupported(boolean supported) {
+	private void setScriptPassordSupported(boolean supported) {
 		scriptPasswordSupported = supported;
 	}
 
@@ -1046,5 +1067,38 @@ public class Client extends TeamController implements ContextReceiver {
 	public void addReceived(long nBytes) {
 
 		receivedSinceLogin += nBytes;
+	}
+
+	/**
+	 * A list of compatibility-flags, each representing a certain minor change
+	 * in protocol since the last protocol version number release.
+	 * These features all have to be implemented in a backwards compatible way,
+	 * so lobby clients not supporting them are still able to function normally.
+	 * This is comparable to IRC user/channel flags.
+	 * By default, all the optional functionalities are considered
+	 * as not supported by the client.
+	 *
+	 * See the "Recent Changes" section or the LOGIN command
+	 * in the lobby protocol documentation for a list of the current flags.
+	 * @return the compatFlags
+	 */
+	public List<String> getCompatFlags() {
+		return compatFlags;
+	}
+
+	/**
+	 * A list of compatibility-flags, each representing a certain minor change
+	 * in protocol since the last protocol version number release.
+	 * @see #getCompatFlags
+	 * @param compatFlags the compatFlags to set
+	 */
+	public void setCompatFlags(List<String> compatFlags) {
+
+		this.compatFlags = Collections.unmodifiableList(compatFlags);
+
+		// protocol version 0.37-SNAPSHOT (after 0.36) compat-flags:
+		setAcceptAccountIDs(compatFlags.contains("a"));
+		setHandleBattleJoinAuthorization(compatFlags.contains("b"));
+		setScriptPassordSupported(compatFlags.contains("sp"));
 	}
 }

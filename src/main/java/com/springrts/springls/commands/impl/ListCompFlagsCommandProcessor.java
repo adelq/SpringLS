@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2011 Robin Vobruba <hoijui.quaero@gmail.com>
+	Copyright (c) 2012 Robin Vobruba <hoijui.quaero@gmail.com>
 
 	This program is free software; you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -18,28 +18,21 @@
 package com.springrts.springls.commands.impl;
 
 
-import com.springrts.springls.Account;
-import com.springrts.springls.Battle;
 import com.springrts.springls.Client;
-import com.springrts.springls.util.Misc;
+import com.springrts.springls.commands.AbstractCommandProcessor;
 import com.springrts.springls.commands.CommandProcessingException;
 import com.springrts.springls.commands.SupportedCommand;
 import java.util.List;
 
-
 /**
- * Sent by client who is participating in a battle to server, who forwards this
- * message to all other clients in the battle. BATTLE_ID is not required since
- * every user can participate in only one battle at the time. If user is not
- * participating in the battle, this command is ignored and is considered
- * invalid.
+ * Sent by client after TASSERVER, to figure out which compatibility flags
+ * are supported by the server in the LOGIN command.
  * @author hoijui
  */
-@SupportedCommand("SAYBATTLE")
-public class SayBattleCommandProcessor extends AbstractSayCommandProcessor {
+@SupportedCommand("LISTCOMPFLAGS")
+public class ListCompFlagsCommandProcessor extends AbstractCommandProcessor {
 
-	public SayBattleCommandProcessor() {
-		super(1, ARGS_MAX_NOCHECK, Account.Access.NORMAL, true);
+	public ListCompFlagsCommandProcessor() {
 	}
 
 	@Override
@@ -51,14 +44,12 @@ public class SayBattleCommandProcessor extends AbstractSayCommandProcessor {
 			return false;
 		}
 
-		Battle battle = getBattle(client);
+		StringBuilder compFlagsCommand = new StringBuilder("COMPFLAGS");
+		for (String compFlag : getContext().getServer().getSupportedCompFlags()) {
+			compFlagsCommand.append(" ").append(compFlag);
+		}
 
-		String message = Misc.makeSentence(args, 0);
-
-		checkFlooding(client, message);
-
-		battle.sendToAllClients(String.format("SAIDBATTLE %s %s",
-				client.getAccount().getName(), message));
+		client.sendLine(compFlagsCommand.toString());
 
 		return true;
 	}

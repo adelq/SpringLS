@@ -30,6 +30,7 @@ import java.io.Reader;
 import java.net.InetAddress;
 import java.util.Locale;
 import java.util.NoSuchElementException;
+import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
@@ -121,9 +122,9 @@ final class IP2Country implements IP2CountryService {
 			LOG.info("Using IP2Country info from file '{}'.",
 					dataFile.getAbsolutePath());
 		} catch (IOException ex) {
-			LOG.warn("Could not find or read from file '{}'. Not using any"
-					+ " IP2Country info.", dataFile.getAbsolutePath());
-			LOG.debug("... reason:", ex);
+			LOG.warn("Could not find or read from file '{}'; reason: {}."
+					+ " -> Not using any IP2Country info.",
+					dataFile.getAbsolutePath(), ex.getMessage());
 			return false;
 		}
 
@@ -229,24 +230,23 @@ final class IP2Country implements IP2CountryService {
 
 		boolean hasDuplicate = false;
 
-		IPRange prev = null;
-		IPRange next = null;
-		try {
-			// +1 because headMap() returns keys that are strictly less
-			// than given key, but we want equals as well
-			prev = resolveTable.headMap(new IPRange(ip.getFromIP() + 1,
-					ip.getToIP() + 1, ProtocolUtil.COUNTRY_UNKNOWN)).lastKey();
+		// +1 because headMap() returns keys that are strictly less
+		// than given key, but we want equals as well
+		SortedMap<IPRange, IPRange> head
+				= resolveTable.headMap(new IPRange(ip.getFromIP() + 1,
+				ip.getToIP() + 1, ProtocolUtil.COUNTRY_UNKNOWN));
+		IPRange prev = head.isEmpty() ? null : head.lastKey();
 
-			// +1 because tailMap() returns keys that are bigger or
-			// equal to given key, but we want strictly bigger ones
-			next = resolveTable.tailMap(new IPRange(ip.getFromIP() + 1,
-					ip.getToIP() + 1, ProtocolUtil.COUNTRY_UNKNOWN)).firstKey();
-		} catch (NoSuchElementException ex) {
-			LOG.debug("Failed to check if IP range overlaps with any other: "
-					+ ip, ex);
-		}
+		// +1 because tailMap() returns keys that are bigger or
+		// equal to given key, but we want strictly bigger ones
+		SortedMap<IPRange, IPRange> tail
+				= resolveTable.tailMap(new IPRange(ip.getFromIP() + 1,
+				ip.getToIP() + 1, ProtocolUtil.COUNTRY_UNKNOWN));
+		IPRange next = tail.isEmpty() ? null : tail.firstKey();
 
-		if (next == null) {
+		if ((prev == null) || (next == null)) {
+			LOG.debug("Failed to check if IP range overlaps with any other: {}",
+					ip);
 			// if either previous or next could not be fetched, assume there is
 			// no dupicate
 			hasDuplicate = false;
@@ -388,19 +388,22 @@ final class IP2Country implements IP2CountryService {
 
 		String result = ProtocolUtil.COUNTRY_UNKNOWN;
 
-		try {
-			long longIp = ProtocolUtil.ip2Long(ip);
-			// +1 because headMap() returns keys that are strictly less than the
-			// given key
-			long longIpPlus = longIp + 1;
-			IPRange x = resolveTable.headMap(new IPRange(longIpPlus, longIpPlus,
-					ProtocolUtil.COUNTRY_UNKNOWN)).lastKey();
-			if ((x.getFromIP() <= longIp) && (x.getToIP() >= longIp)) {
-				result = x.getCountryCode2();
-			}
-		} catch (NoSuchElementException ex) {
-			LOG.debug("Failed to evaluate country code for IP: "
-					+ ip.getHostAddress(), ex);
+		long longIp = ProtocolUtil.ip2Long(ip);
+		// +1 because headMap() returns keys that are strictly less than the
+		// given key
+		long longIpPlus = longIp + 1;
+		SortedMap<IPRange, IPRange> possiblyFittingEntries
+				= resolveTable.headMap(new IPRange(longIpPlus, longIpPlus,
+				ProtocolUtil.COUNTRY_UNKNOWN));
+		IPRange rng = null; // a range that might fit
+		if (!possiblyFittingEntries.isEmpty()) {
+			rng = possiblyFittingEntries.lastKey();
+		}
+		if ((rng != null) && rng.contains(longIp)) {
+			result = rng.getCountryCode2();
+		} else {
+			LOG.debug("Failed to evaluate country code for IP: {}",
+					ip.getHostAddress());
 		}
 
 		// quick fix for some non-standard country codes:
